@@ -130,7 +130,6 @@ firestore-debug.log
 # Google Cloud
 gcloud-service-key.json
 service-account-key.json
-*.json
 
 # Cypress
 cypress/videos/
@@ -149,3 +148,6 @@ __pycache__/
 
 # Docker
 docker-compose.override.yml 
+temp_auto_push.bat
+temp_interactive_push.bat
+branch_structure.json
