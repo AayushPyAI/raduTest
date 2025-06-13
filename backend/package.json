@@ -1,0 +1,53 @@
+{
+    "name": "patent-search-backend",
+    "version": "1.0.0",
+    "description": "Backend API for patent semantic search system",
+    "main": "dist/index.js",
+    "scripts": {
+        "dev": "nodemon",
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "start:public": "npx ts-node start-public-dataset.js",
+        "setup:real-data": "node enable-real-data.js",
+        "test:real-data": "node test-real-data.js",
+        "index:patents": "npm run build && node index-patents.js",
+        "verify:setup": "node verify-complete-setup.js"
+    },
+    "keywords": [
+        "patent",
+        "search",
+        "semantic",
+        "bigquery",
+        "ai",
+        "prior-art"
+    ],
+    "author": "Patent Search Team",
+    "license": "MIT",
+    "dependencies": {
+        "@google-cloud/bigquery": "^7.8.0",
+        "@pinecone-database/pinecone": "^6.1.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.5",
+        "express": "^4.19.2",
+        "express-rate-limit": "^7.2.0",
+        "firebase-admin": "^12.1.0",
+        "helmet": "^7.1.0",
+        "morgan": "^1.10.0",
+        "openai": "^4.52.1",
+        "winston": "^3.13.0",
+        "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
+        "@types/morgan": "^1.9.9",
+        "@types/node": "^20.12.12",
+        "nodemon": "^3.1.0",
+        "ts-node": "^10.9.2",
+        "tsconfig-paths": "^4.2.0",
+        "typescript": "^5.4.5"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

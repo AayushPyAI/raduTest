@@ -130,7 +130,6 @@ firestore-debug.log
 # Google Cloud
 gcloud-service-key.json
 service-account-key.json
-*.json
 
 # Cypress
 cypress/videos/
