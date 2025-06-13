@@ -19,6 +19,7 @@ interface Config {
         dataset: string;
         location: string;
         maxResults: number;
+        publicDataset: boolean;
     };
 
     // Pinecone Configuration
@@ -26,7 +27,12 @@ interface Config {
         apiKey: string;
         environment: string;
         indexName: string;
-        dimension: number;
+        host?: string;
+        metric: string;
+        model: string;
+        type: string;
+        cloud: string;
+        region: string;
     };
 
     // OpenAI Configuration
@@ -59,7 +65,6 @@ interface Config {
 }
 
 const requiredEnvVars = [
-    'GOOGLE_CLOUD_PROJECT_ID',
     'PINECONE_API_KEY',
     'PINECONE_ENVIRONMENT',
     'OPENAI_API_KEY',
@@ -78,24 +83,30 @@ export const config: Config = {
     port: parseInt(process.env.PORT || '3001', 10),
     corsOrigins: process.env.CORS_ORIGINS
         ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
-        : ['http://localhost:3000', 'http://localhost:3001'],
+        : ['http://localhost:3005', 'http://localhost:3001', 'http://localhost:3002'],
 
     googleCloud: {
-        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID!,
-        keyFilename: process.env.GOOGLE_CLOUD_KEY_FILE,
+        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID || 'excel-search-462706', // User's project for billing
+        keyFilename: process.env.GOOGLE_CLOUD_KEY_FILE, // Optional - will use ADC if not provided
     },
 
     bigquery: {
-        dataset: process.env.BIGQUERY_DATASET || 'patents-public-data',
+        dataset: 'patents-public-data.patents', // Full reference to Google's public patent dataset
         location: process.env.BIGQUERY_LOCATION || 'US',
         maxResults: parseInt(process.env.BIGQUERY_MAX_RESULTS || '1000', 10),
+        publicDataset: true, // Flag to indicate we're using public dataset
     },
 
     pinecone: {
         apiKey: process.env.PINECONE_API_KEY!,
         environment: process.env.PINECONE_ENVIRONMENT!,
         indexName: process.env.PINECONE_INDEX_NAME || 'patent-embeddings',
-        dimension: parseInt(process.env.PINECONE_DIMENSION || '1536', 10),
+        host: process.env.PINECONE_HOST,
+        metric: process.env.PINECONE_METRIC || 'cosine',
+        model: process.env.PINECONE_MODEL || 'text-embedding-3-small',
+        type: process.env.PINECONE_TYPE || 'euclidean',
+        cloud: process.env.PINECONE_CLOUD || 'pinecone-cloud',
+        region: process.env.PINECONE_REGION || 'us-west1-gcp',
     },
 
     openai: {
@@ -127,10 +138,6 @@ export const config: Config = {
 export const validateConfig = (): void => {
     if (config.port < 1 || config.port > 65535) {
         throw new Error('Port must be between 1 and 65535');
-    }
-
-    if (config.pinecone.dimension < 1 || config.pinecone.dimension > 20000) {
-        throw new Error('Pinecone dimension must be between 1 and 20000');
     }
 
     if (config.openai.maxTokens < 1 || config.openai.maxTokens > 8000) {

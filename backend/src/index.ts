@@ -21,6 +21,9 @@ dotenv.config();
 const app = express();
 const PORT = config.port || 3001;
 
+// Trust proxy for rate limiting (fixes X-Forwarded-For header warning)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
     contentSecurityPolicy: {
@@ -70,9 +73,8 @@ if (config.nodeEnv !== 'test') {
 // Health check route (no auth required)
 app.use('/api/health', healthRoutes);
 
-// Apply authentication middleware to protected routes
-app.use('/api/search', authMiddleware);
-app.use('/api/analytics', authMiddleware);
+// Apply routes with authentication
+app.use('/api', authMiddleware);
 
 // API routes
 app.use('/api/search', searchRoutes);

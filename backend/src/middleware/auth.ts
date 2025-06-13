@@ -37,13 +37,13 @@ export const authMiddleware = async (
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            throw createUnauthorizedError('No valid authorization header provided');
+            return next(createUnauthorizedError('No valid authorization header provided'));
         }
 
         const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
         if (!token) {
-            throw createUnauthorizedError('No token provided');
+            return next(createUnauthorizedError('No token provided'));
         }
 
         // Verify the Firebase ID token
@@ -76,19 +76,19 @@ export const authMiddleware = async (
 
             // Handle specific Firebase Auth errors
             if (error.message.includes('auth/id-token-expired')) {
-                throw createUnauthorizedError('Token has expired');
+                return next(createUnauthorizedError('Token has expired'));
             }
 
             if (error.message.includes('auth/invalid-id-token')) {
-                throw createUnauthorizedError('Invalid token');
+                return next(createUnauthorizedError('Invalid token'));
             }
 
             if (error.message.includes('auth/user-disabled')) {
-                throw createUnauthorizedError('User account is disabled');
+                return next(createUnauthorizedError('User account is disabled'));
             }
         }
 
-        throw createUnauthorizedError('Authentication failed');
+        return next(createUnauthorizedError('Authentication failed'));
     }
 };
 
@@ -137,7 +137,7 @@ export const requireAdminRole = (
     next: NextFunction
 ): void => {
     if (!req.user) {
-        throw createUnauthorizedError('Authentication required');
+        return next(createUnauthorizedError('Authentication required'));
     }
 
     // Check if user has admin role (this would be stored in custom claims)
@@ -147,7 +147,7 @@ export const requireAdminRole = (
             const customClaims = userRecord.customClaims;
 
             if (!customClaims || !customClaims.admin) {
-                throw createUnauthorizedError('Admin access required');
+                return next(createUnauthorizedError('Admin access required'));
             }
 
             next();
@@ -158,7 +158,7 @@ export const requireAdminRole = (
                 error: error.message,
             });
 
-            throw createUnauthorizedError('Admin access verification failed');
+            return next(createUnauthorizedError('Admin access verification failed'));
         });
 };
 
@@ -169,7 +169,7 @@ export const requirePremiumAccess = (
     next: NextFunction
 ): void => {
     if (!req.user) {
-        throw createUnauthorizedError('Authentication required');
+        return next(createUnauthorizedError('Authentication required'));
     }
 
     admin.auth()
@@ -178,7 +178,7 @@ export const requirePremiumAccess = (
             const customClaims = userRecord.customClaims;
 
             if (!customClaims || (!customClaims.premium && !customClaims.admin)) {
-                throw createUnauthorizedError('Premium subscription required');
+                return next(createUnauthorizedError('Premium subscription required'));
             }
 
             next();
@@ -189,7 +189,7 @@ export const requirePremiumAccess = (
                 error: error.message,
             });
 
-            throw createUnauthorizedError('Premium access verification failed');
+            return next(createUnauthorizedError('Premium access verification failed'));
         });
 };
 
@@ -199,7 +199,7 @@ export const createUserRateLimit = (maxRequests: number, windowMs: number) => {
 
     return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
         if (!req.user) {
-            throw createUnauthorizedError('Authentication required for rate limiting');
+            return next(createUnauthorizedError('Authentication required for rate limiting'));
         }
 
         const userId = req.user.uid;

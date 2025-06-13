@@ -1,11 +1,8 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { asyncHandler } from '@/middleware/errorHandler';
 import { config } from '@/config/config';
-
 const router = Router();
-
-// GET /api/health
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', asyncHandler(async (req: Request, res: Response) => {
     const healthData = {
         status: 'operational',
         timestamp: new Date().toISOString(),
@@ -19,11 +16,9 @@ router.get('/', asyncHandler(async (req, res) => {
         },
         uptime: process.uptime(),
     };
-
     res.json({
         success: true,
         data: healthData,
     });
 }));
-
-export default router; 
+export default router;

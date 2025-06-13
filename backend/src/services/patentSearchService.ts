@@ -1,6 +1,13 @@
-import { BigQueryService, PatentResult, PatentSearchFilters } from './bigQueryService';
+import { BigQueryService, PatentSearchFilters, PatentResult } from './bigqueryService';
 import { SemanticSearchService, SemanticSearchResult } from './semanticSearchService';
-import { logger, patentLogger } from '@/utils/logger';
+import { logger } from '@/utils/logger';
+
+// Patent-specific logger
+const patentLogger = {
+    searchQuery: (query: string) => logger.info('Patent search query', { query: query.substring(0, 100) }),
+    searchResults: (count: number, executionTime: number) => logger.info('Patent search completed', { resultCount: count, executionTimeMs: executionTime }),
+    error: (error: Error, context: string, query?: string) => logger.error('Patent search error', { error: error.message, context, query: query?.substring(0, 100) }),
+};
 import { config } from '@/config/config';
 
 export interface CombinedSearchRequest {
@@ -122,32 +129,23 @@ export class PatentSearchService {
         filters?: PatentSearchFilters,
         minSimilarity: number = 0.7
     ): Promise<PatentResult[]> {
-        try {
-            const semanticResults = await this.semanticSearchService.semanticPatentSearch(
-                query,
-                limit * 2
-            );
+        const semanticResults = await this.semanticSearchService.semanticPatentSearch(
+            query,
+            limit * 2
+        );
 
-            const filteredResults = semanticResults.filter(
-                result => result.similarity_score >= minSimilarity
-            );
+        const filteredResults = semanticResults.filter(
+            result => result.similarity_score >= minSimilarity
+        );
 
-            if (filteredResults.length === 0) {
-                logger.info('No semantic results found, falling back to keyword search');
-                return await this.performKeywordSearch(query, filters, limit);
-            }
-
-            const patentIds = filteredResults.map(result => result.patent_id);
-            const patents = await this.bigQueryService.getPatentsByIds(patentIds);
-
-            return this.mergeSimilarityScores(patents, filteredResults).slice(0, limit);
-
-        } catch (error) {
-            logger.error('Semantic search failed, falling back to keyword search', {
-                error: (error as Error).message,
-            });
-            return await this.performKeywordSearch(query, filters, limit);
+        if (filteredResults.length === 0) {
+            throw new Error(`No semantic search results found with similarity score >= ${minSimilarity}. Please try a different query or lower the similarity threshold.`);
         }
+
+        const patentIds = filteredResults.map(result => result.patent_id);
+        const patents = await this.bigQueryService.getPatentsByIds(patentIds);
+
+        return this.mergeSimilarityScores(patents, filteredResults).slice(0, limit);
     }
 
     /**
@@ -170,20 +168,12 @@ export class PatentSearchService {
         limit: number = 50,
         minSimilarity: number = 0.7
     ): Promise<PatentResult[]> {
-        try {
-            const [semanticResults, keywordResults] = await Promise.all([
-                this.performSemanticSearch(query, Math.floor(limit * 0.7), filters, minSimilarity),
-                this.performKeywordSearch(query, filters, Math.floor(limit * 0.5)),
-            ]);
+        const [semanticResults, keywordResults] = await Promise.all([
+            this.performSemanticSearch(query, Math.floor(limit * 0.7), filters, minSimilarity),
+            this.performKeywordSearch(query, filters, Math.floor(limit * 0.5)),
+        ]);
 
-            return this.combineAndRankResults(semanticResults, keywordResults).slice(0, limit);
-
-        } catch (error) {
-            logger.error('Hybrid search failed, falling back to keyword search', {
-                error: (error as Error).message,
-            });
-            return await this.performKeywordSearch(query, filters, limit);
-        }
+        return this.combineAndRankResults(semanticResults, keywordResults).slice(0, limit);
     }
 
     /**
@@ -207,13 +197,15 @@ export class PatentSearchService {
 
             if (originalPatents.length > 0) {
                 const originalPatent = originalPatents[0];
-                const searchText = `${originalPatent.title} ${originalPatent.abstract}`;
+                if (originalPatent && originalPatent.title && originalPatent.abstract) {
+                    const searchText = `${originalPatent.title} ${originalPatent.abstract}`;
 
-                // Find semantically similar patents
-                similar = await this.performSemanticSearch(searchText, 20, undefined, 0.8);
+                    // Find semantically similar patents
+                    similar = await this.performSemanticSearch(searchText, 20, undefined, 0.8);
 
-                // Remove the original patent from similar results
-                similar = similar.filter(p => p.patent_id !== patentId);
+                    // Remove the original patent from similar results
+                    similar = similar.filter(p => p.patent_id !== patentId);
+                }
             }
 
             const executionTime = Date.now() - startTime;
@@ -288,7 +280,7 @@ export class PatentSearchService {
      */
     async getSystemStatus(): Promise<{
         bigquery: { status: string; dataset: string };
-        pinecone: { status: string; vectorCount?: number; dimension?: number };
+        pinecone: { status: string; vectorCount?: number; indexType?: string };
         openai: { status: string; model: string };
     }> {
         try {
@@ -306,7 +298,7 @@ export class PatentSearchService {
                 pinecone: {
                     status: indexStatus.exists && indexStatus.ready ? 'operational' : 'not_ready',
                     vectorCount: indexStatus.vectorCount,
-                    dimension: indexStatus.dimension,
+                    indexType: indexStatus.indexType,
                 },
                 openai: {
                     status: 'operational',
@@ -489,10 +481,13 @@ export class PatentSearchService {
 
         for (let i = 0; i < Math.min(patents.length, 20); i++) {
             for (let j = i + 1; j < Math.min(patents.length, 20); j++) {
-                if (Math.random() > 0.8) { // 20% chance of citation
+                const patentI = patents[i];
+                const patentJ = patents[j];
+
+                if (patentI && patentJ && Math.random() > 0.8) { // 20% chance of citation
                     edges.push({
-                        source: patents[i].patent_id,
-                        target: patents[j].patent_id,
+                        source: patentI.patent_id,
+                        target: patentJ.patent_id,
                         weight: Math.random(),
                     });
                 }

@@ -12,18 +12,14 @@ import { Analytics } from './pages/Analytics';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import './index.css';
-
-// Create a query client for React Query
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            refetchOnWindowFocus: false,
-            retry: 1,
-            staleTime: 5 * 60 * 1000, // 5 minutes
+            retry: 2,
+            staleTime: 5 * 60 * 1000, 
         },
     },
 });
-
 function App() {
     return (
         <QueryClientProvider client={queryClient}>
@@ -39,23 +35,25 @@ function App() {
                                     color: '#fff',
                                 },
                                 success: {
-                                    style: {
-                                        background: '#059669',
+                                    duration: 3005,
+                                    iconTheme: {
+                                        primary: '#4ade80',
+                                        secondary: '#fff',
                                     },
                                 },
                                 error: {
-                                    style: {
-                                        background: '#DC2626',
+                                    duration: 5000,
+                                    iconTheme: {
+                                        primary: '#ef4444',
+                                        secondary: '#fff',
                                     },
                                 },
                             }}
                         />
-
                         <Routes>
-                            {/* Public routes */}
+                            {}
                             <Route path="/login" element={<Login />} />
-
-                            {/* Protected routes with layout */}
+                            {}
                             <Route path="/" element={
                                 <ProtectedRoute>
                                     <Layout>
@@ -63,7 +61,6 @@ function App() {
                                     </Layout>
                                 </ProtectedRoute>
                             } />
-
                             <Route path="/search" element={
                                 <ProtectedRoute>
                                     <Layout>
@@ -71,7 +68,6 @@ function App() {
                                     </Layout>
                                 </ProtectedRoute>
                             } />
-
                             <Route path="/patent/:patentId" element={
                                 <ProtectedRoute>
                                     <Layout>
@@ -79,7 +75,6 @@ function App() {
                                     </Layout>
                                 </ProtectedRoute>
                             } />
-
                             <Route path="/analytics" element={
                                 <ProtectedRoute>
                                     <Layout>
@@ -87,7 +82,6 @@ function App() {
                                     </Layout>
                                 </ProtectedRoute>
                             } />
-
                             <Route path="/dashboard" element={
                                 <ProtectedRoute>
                                     <Layout>
@@ -95,8 +89,7 @@ function App() {
                                     </Layout>
                                 </ProtectedRoute>
                             } />
-
-                            {/* Catch all route */}
+                            {}
                             <Route path="*" element={
                                 <div className="min-h-screen flex items-center justify-center bg-gray-50">
                                     <div className="text-center">
@@ -120,5 +113,4 @@ function App() {
         </QueryClientProvider>
     );
 }
-
-export default App; 
+export default App;

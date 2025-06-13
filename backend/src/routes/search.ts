@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '@/middleware/errorHandler';
 import { PatentSearchService } from '@/services/patentSearchService';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { createValidationError } from '@/middleware/errorHandler';
 import { logger } from '@/utils/logger';
+import { SemanticSearchService } from '@/services/semanticSearchService';
 
 const router = Router();
 const patentSearchService = new PatentSearchService();
@@ -31,7 +32,7 @@ const relatedPatentsSchema = z.object({
 });
 
 // POST /api/search/semantic
-router.post('/semantic', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/semantic', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
         // Validate request body
         const validatedData = semanticSearchSchema.parse(req.body);
@@ -69,7 +70,7 @@ router.post('/semantic', asyncHandler(async (req: AuthenticatedRequest, res) => 
 }));
 
 // GET /api/search/related/:patentId
-router.get('/related/:patentId', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/related/:patentId', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { patentId } = relatedPatentsSchema.parse({ patentId: req.params.patentId });
 
@@ -103,7 +104,7 @@ router.get('/related/:patentId', asyncHandler(async (req: AuthenticatedRequest, 
 }));
 
 // POST /api/search/quick
-router.post('/quick', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/quick', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { query } = z.object({
             query: z.string().min(1, 'Query is required').max(1000, 'Query too long'),
@@ -142,7 +143,7 @@ router.post('/quick', asyncHandler(async (req: AuthenticatedRequest, res) => {
 }));
 
 // GET /api/search/suggestions
-router.get('/suggestions', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/suggestions', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { q } = z.object({
             q: z.string().min(1, 'Query parameter q is required'),
@@ -176,7 +177,7 @@ router.get('/suggestions', asyncHandler(async (req: AuthenticatedRequest, res) =
 }));
 
 // GET /api/search/status
-router.get('/status', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/status', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     logger.debug('Search service status request', {
         userId: req.user?.uid,
     });
@@ -191,7 +192,7 @@ router.get('/status', asyncHandler(async (req: AuthenticatedRequest, res) => {
 }));
 
 // POST /api/search/batch
-router.post('/batch', asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/batch', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { queries } = z.object({
             queries: z.array(z.string().min(1).max(1000)).min(1).max(10),
@@ -278,7 +279,7 @@ function generateSearchSuggestions(query: string): string[] {
 
     // Filter terms that match the query
     const suggestions = commonPatentTerms
-        .filter(term => term.includes(queryLower) || queryLower.includes(term.split(' ')[0]))
+        .filter(term => term.includes(queryLower) || queryLower.includes(term.split(' ')[0] || ''))
         .slice(0, 8);
 
     // Add technology variations if specific terms are found

@@ -6,7 +6,6 @@ import { SearchResults } from '../components/Search/SearchResults';
 import { SearchFilters } from '../components/Search/SearchFilters';
 import { LoadingSpinner } from '../components/UI/LoadingSpinner';
 import { EmptyState } from '../components/UI/EmptyState';
-import { PatentCard } from '../components/Patent/PatentCard';
 import { api } from '../services/api';
 import { PatentResult, SearchFilters as SearchFiltersType } from '../types/patent';
 
@@ -164,63 +163,65 @@ export const Search: React.FC = () => {
 
                         {/* Search Results */}
                         <div className="bg-white rounded-lg shadow-sm border">
-                            {!searchQuery && (
-                                <EmptyState
-                                    icon={BookOpen}
-                                    title="Start your patent search"
-                                    description="Enter a description of your idea, technology, or invention to find relevant patents"
-                                    action={
-                                        <button
-                                            onClick={() => {
-                                                const exampleQuery = "machine learning for autonomous vehicles";
-                                                handleSearch({
-                                                    query: exampleQuery,
-                                                    searchType: 'hybrid',
-                                                    limit: 20,
-                                                });
-                                            }}
-                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                        >
-                                            Try Example Search
-                                        </button>
-                                    }
-                                />
-                            )}
+                            <>
+                                {!searchQuery && (
+                                    <EmptyState
+                                        icon={BookOpen}
+                                        title="Start your patent search"
+                                        description="Enter a description of your idea, technology, or invention to find relevant patents"
+                                        action={
+                                            <button
+                                                onClick={() => {
+                                                    const exampleQuery = "machine learning for autonomous vehicles";
+                                                    handleSearch({
+                                                        query: exampleQuery,
+                                                        searchType: 'hybrid',
+                                                        limit: 20,
+                                                    });
+                                                }}
+                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            >
+                                                Try Example Search
+                                            </button>
+                                        }
+                                    />
+                                )}
 
-                            {isLoading && (
-                                <div className="p-8">
-                                    <LoadingSpinner size="lg" />
-                                    <p className="text-center text-gray-600 mt-4">
-                                        Searching through millions of patents...
-                                    </p>
-                                </div>
-                            )}
-
-                            {error && (
-                                <div className="p-8">
-                                    <div className="text-center">
-                                        <p className="text-red-600 mb-4">
-                                            An error occurred while searching. Please try again.
+                                {isLoading && (
+                                    <div className="p-8">
+                                        <LoadingSpinner size="lg" />
+                                        <p className="text-center text-gray-600 mt-4">
+                                            Searching through millions of patents...
                                         </p>
-                                        <button
-                                            onClick={() => refetch()}
-                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                                        >
-                                            Retry Search
-                                        </button>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {searchResults && !isLoading && (
-                                <SearchResults
-                                    results={searchResults.data.results}
-                                    totalResults={searchResults.data.total_results}
-                                    searchTime={searchResults.data.search_time_ms}
-                                    searchMetadata={searchResults.data.search_metadata}
-                                    query={searchQuery?.query || ''}
-                                />
-                            )}
+                                {error && (
+                                    <div className="p-8">
+                                        <div className="text-center">
+                                            <p className="text-red-600 mb-4">
+                                                An error occurred while searching. Please try again.
+                                            </p>
+                                            <button
+                                                onClick={() => refetch()}
+                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                            >
+                                                Retry Search
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {searchResults && !isLoading && (
+                                    <SearchResults
+                                        results={searchResults.data.results}
+                                        totalResults={searchResults.data.total_results}
+                                        searchTime={searchResults.data.search_time_ms}
+                                        searchMetadata={searchResults.data.search_metadata}
+                                        query={searchQuery?.query || ''}
+                                    />
+                                )}
+                            </>
                         </div>
                     </div>
                 </div>

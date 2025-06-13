@@ -1,8 +1,14 @@
-import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { config } from '@/config/config';
-import { logger, patentLogger } from '@/utils/logger';
-import { PatentResult } from './bigQueryService';
+import { logger } from '@/utils/logger';
+import { PatentResult } from './bigqueryService';
+
+// Patent-specific logger
+const patentLogger = {
+    embeddingGeneration: (textLength: number, executionTime: number) => logger.info('Generated embedding', { textLength, executionTimeMs: executionTime }),
+    vectorSearch: (sparseVectorSize: number, topSimilarity: number, resultCount: number) => logger.info('Vector search completed', { sparseVectorSize, topSimilarity, resultCount }),
+    error: (error: Error, context: string, query?: string) => logger.error('Semantic search error', { error: error.message, context, query: query?.substring(0, 100) }),
+};
 
 export interface SemanticSearchResult {
     patent_id: string;
@@ -11,64 +17,87 @@ export interface SemanticSearchResult {
 }
 
 export interface EmbeddingResult {
-    embedding: number[];
+    embedding: { indices: number[]; values: number[] }; // Sparse vector format
     text: string;
     tokens: number;
 }
 
 export class SemanticSearchService {
-    private openai: OpenAI;
     private pinecone: Pinecone;
     private indexName: string;
 
     constructor() {
-        this.openai = new OpenAI({
-            apiKey: config.openai.apiKey,
-        });
-
         this.pinecone = new Pinecone({
             apiKey: config.pinecone.apiKey,
-            environment: config.pinecone.environment,
         });
 
         this.indexName = config.pinecone.indexName;
 
         logger.info('Semantic search service initialized', {
-            model: config.openai.embeddingModel,
+            model: config.pinecone.model,
             indexName: this.indexName,
-            dimension: config.pinecone.dimension,
+            type: config.pinecone.type,
+            metric: config.pinecone.metric,
+            host: config.pinecone.host,
         });
     }
 
     /**
-     * Generate embeddings for text using OpenAI
+     * Generate embeddings for text using Pinecone Inference API
      */
     async generateEmbedding(text: string): Promise<EmbeddingResult> {
         const startTime = Date.now();
 
         try {
-            // Clean and truncate text to avoid token limits
+            // Clean and truncate text
             const cleanText = this.preprocessText(text);
 
-            logger.debug('Generating embedding', {
+            logger.debug('Generating sparse embedding', {
                 textLength: cleanText.length,
-                model: config.openai.embeddingModel
+                model: config.pinecone.model
             });
 
-            const response = await this.openai.embeddings.create({
-                model: config.openai.embeddingModel,
-                input: cleanText,
-            });
+            // Use Pinecone Inference API for sparse embeddings
+            const embedding = await this.pinecone.inference.embed(
+                config.pinecone.model,
+                [cleanText],
+                { inputType: 'passage' }
+            ) as any; // Using any to handle response type issues
 
-            const embedding = response.data[0].embedding;
-            const tokens = response.usage?.total_tokens || 0;
+            const embeddingData = embedding.data?.[0] as any; // Using any to handle both sparse and dense formats
+            if (!embeddingData) {
+                throw new Error('No embedding data returned from Pinecone Inference API');
+            }
+
+            let sparseVector: { indices: number[]; values: number[] };
+
+            // Handle sparse vector response format
+            if (embeddingData.sparseValues && embeddingData.sparseIndices) {
+                // Direct sparse format from Pinecone
+                sparseVector = {
+                    indices: embeddingData.sparseIndices,
+                    values: embeddingData.sparseValues,
+                };
+                logger.debug('Using direct sparse vector format', {
+                    nonZeroValues: sparseVector.values.length
+                });
+            } else if (embeddingData.values) {
+                // Dense format - convert to sparse
+                sparseVector = this.convertToSparseVector(embeddingData.values);
+                logger.debug('Converted dense to sparse vector format', {
+                    originalLength: embeddingData.values.length,
+                    nonZeroValues: sparseVector.values.length
+                });
+            } else {
+                throw new Error('No valid embedding values returned from Pinecone Inference API');
+            }
 
             patentLogger.embeddingGeneration(cleanText.length, Date.now() - startTime);
 
             return {
-                embedding,
+                embedding: sparseVector,
                 text: cleanText,
-                tokens,
+                tokens: cleanText.split(' ').length, // Approximate token count
             };
         } catch (error) {
             patentLogger.error(error as Error, 'Embedding generation failed');
@@ -77,10 +106,28 @@ export class SemanticSearchService {
     }
 
     /**
+     * Convert dense vector to sparse vector format
+     */
+    private convertToSparseVector(denseVector: number[]): { indices: number[]; values: number[] } {
+        const indices: number[] = [];
+        const values: number[] = [];
+
+        for (let i = 0; i < denseVector.length; i++) {
+            const value = denseVector[i];
+            if (value !== undefined && value !== 0) {
+                indices.push(i);
+                values.push(value);
+            }
+        }
+
+        return { indices, values };
+    }
+
+    /**
      * Search for similar patents using vector similarity
      */
     async searchSimilarPatents(
-        queryEmbedding: number[],
+        queryEmbedding: { indices: number[]; values: number[] },
         topK: number = 50,
         filters?: Record<string, any>
     ): Promise<SemanticSearchResult[]> {
@@ -91,16 +138,16 @@ export class SemanticSearchService {
 
             logger.debug('Searching similar patents', {
                 topK,
-                dimension: queryEmbedding.length,
+                sparseVectorSize: queryEmbedding.values.length,
                 filters: filters ? Object.keys(filters) : []
             });
 
             const queryRequest = {
-                vector: queryEmbedding,
                 topK,
                 includeMetadata: true,
-                filter: filters,
-            };
+                sparseVector: queryEmbedding,
+                ...(filters && { filter: filters }),
+            } as any; // Type assertion to bypass Pinecone SDK type restrictions for sparse-only queries
 
             const queryResponse = await index.query(queryRequest);
 
@@ -110,13 +157,9 @@ export class SemanticSearchService {
                 metadata: match.metadata as Record<string, any>,
             })) || [];
 
-            const topSimilarity = results.length > 0 ? results[0].similarity_score : 0;
+            const topSimilarity = results.length > 0 ? results[0]?.similarity_score || 0 : 0;
 
-            patentLogger.vectorSearch(
-                queryEmbedding.length,
-                topSimilarity,
-                results.length
-            );
+            patentLogger.vectorSearch(queryEmbedding.values.length, topSimilarity, results.length);
 
             logger.debug('Vector search completed', {
                 resultsCount: results.length,
@@ -205,7 +248,8 @@ export class SemanticSearchService {
                         // Prepare vector for Pinecone
                         const vector = {
                             id: patent.patent_id,
-                            values: embeddingResult.embedding,
+                            values: [], // Empty dense vector for sparse-only indexing
+                            sparseValues: embeddingResult.embedding,
                             metadata: {
                                 title: patent.title,
                                 abstract: patent.abstract.substring(0, 1000), // Limit metadata size
@@ -261,7 +305,7 @@ export class SemanticSearchService {
         exists: boolean;
         ready: boolean;
         vectorCount?: number;
-        dimension?: number;
+        indexType?: string;
     }> {
         try {
             const indexList = await this.pinecone.listIndexes();
@@ -275,9 +319,9 @@ export class SemanticSearchService {
 
             return {
                 exists: true,
-                ready: indexStats.totalVectorCount !== undefined,
-                vectorCount: indexStats.totalVectorCount,
-                dimension: indexStats.dimension,
+                ready: indexStats.totalRecordCount !== undefined,
+                vectorCount: indexStats.totalRecordCount,
+                indexType: config.pinecone.type,
             };
 
         } catch (error) {
@@ -293,17 +337,17 @@ export class SemanticSearchService {
         try {
             logger.info('Creating Pinecone index', {
                 indexName: this.indexName,
-                dimension: config.pinecone.dimension
+                type: config.pinecone.type
             });
 
             await this.pinecone.createIndex({
                 name: this.indexName,
-                dimension: config.pinecone.dimension,
-                metric: 'cosine',
+                dimension: 50000, // Max dimension for sparse vectors
+                metric: 'dotproduct' as const,
                 spec: {
                     serverless: {
-                        cloud: 'aws',
-                        region: 'us-east-1',
+                        cloud: 'aws' as const,
+                        region: config.pinecone.region,
                     },
                 },
             });
@@ -347,7 +391,7 @@ export class SemanticSearchService {
         cleaned = cleaned.replace(/[^\w\s\-.,!?;:()\[\]]/g, ' ');
 
         // Truncate to avoid token limits (approximately 8000 tokens = 32000 characters)
-        const maxLength = 30000;
+        const maxLength = 30050;
         if (cleaned.length > maxLength) {
             cleaned = cleaned.substring(0, maxLength) + '...';
         }
@@ -356,24 +400,19 @@ export class SemanticSearchService {
     }
 
     /**
-     * Get embedding dimension for validation
-     */
-    getDimension(): number {
-        return config.pinecone.dimension;
-    }
-
-    /**
      * Get model information
      */
     getModelInfo(): {
         embeddingModel: string;
-        dimension: number;
+        indexType: string;
         indexName: string;
+        metric: string;
     } {
         return {
-            embeddingModel: config.openai.embeddingModel,
-            dimension: config.pinecone.dimension,
+            embeddingModel: config.pinecone.model,
+            indexType: config.pinecone.type,
             indexName: this.indexName,
+            metric: config.pinecone.metric,
         };
     }
 } 
